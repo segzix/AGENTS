@@ -1,0 +1,526 @@
+{
+  // OpenCode 配置文件 Schema：用于编辑器提示与配置校验。
+  "$schema": "https://opencode.ai/config.json",
+
+  // 关闭会话分享，避免把会话内容上传或公开。
+  "share": "disabled",
+
+  // 关闭自动更新，避免工具版本自动变化影响当前配置稳定性。
+  "autoupdate": false,
+  
+  // mcp server for opencode tools
+  "mcp": {
+    "pdf-tools": {
+      "type": "local",
+      "command": [
+        "python",
+        "/home/segzix/.config/opencode/mcp-servers/pdf-tools/pdf_tools_server.py"
+      ],
+      "enabled": true,
+      "timeout": 10000
+    },
+    "image-tools": {
+      "type": "local",
+      "command": [
+        "python",
+        "/home/segzix/.config/opencode/mcp-servers/image-tools/image_tools_server.py"
+      ],
+      "enabled": true,
+      "timeout": 10000
+    }
+  },
+
+  // ============================================================
+  // Provider 配置区
+  // 这里定义 OpenCode 可以调用哪些模型服务。
+  // 当前包含两个 provider：
+  // 1. deepseek：直接访问 DeepSeek 官方 API。
+  // 2. local-bridge：访问本地 uvicorn bridge，再由 bridge 转发到第三方 GPT / Claude 平台。
+  // ============================================================
+  "provider": {
+    // DeepSeek 官方 API：用于 planner / debugger / researcher 等分析类角色。
+    "deepseek": {
+      // 使用 OpenAI-compatible 适配器，因为 DeepSeek 提供 OpenAI 兼容接口。
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "DeepSeek Official API",
+      "options": {
+        // DeepSeek 官网 API 地址。这里不经过本地 uvicorn bridge。
+        "baseURL": "https://api.deepseek.com",
+
+        // 从环境变量读取 DeepSeek API key，避免把真实 key 写进配置文件。
+        "apiKey": "{env:DEEPSEEK_API_KEY}"
+      },
+      "models": {
+        // DeepSeek 强推理/主力模型。
+        "deepseek-v4-pro": {
+          "name": "DeepSeek V4 Pro"
+        },
+
+        // DeepSeek 轻量/快速模型，用作 small_model。
+        "deepseek-v4-flash": {
+          "name": "DeepSeek V4 Flash"
+        }
+      }
+    },
+
+    // 本地 uvicorn bridge：GPT 和 Claude 都通过它转发。
+    // OpenCode 只知道 LOCAL_BRIDGE_API_KEY；第三方真实 CODEX_API_KEY / CLAUDE_API_KEY 由 bridge.py 内部读取。
+    "local-bridge": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Local uvicorn bridge for GPT and Claude",
+      "options": {
+        // 本地 uvicorn bridge 地址。需要确保 bridge.py 正在 127.0.0.1:9010 运行。
+        "baseURL": "http://127.0.0.1:9010/v1",
+
+        // 访问本地 bridge 的门禁 key，不是第三方平台真实 key。
+        "apiKey": "{env:LOCAL_BRIDGE_API_KEY}"
+      },
+      "models": {
+        // GPT 主力编码模型：coder 默认使用它。
+        "gpt-5.5": {
+          "name": "GPT-5.5 via local uvicorn"
+        },
+
+        // GPT 小模型：可用于低成本辅助任务。
+        "gpt-5.4-mini": {
+          "name": "GPT-5.4 Mini via local uvicorn"
+        },
+
+        // Claude Haiku：轻量 Claude 模型，可用于快速审查或低成本任务。
+        "claude-haiku-4-5-20251001": {
+          "name": "Claude Haiku 4.5 via local uvicorn"
+        },
+
+        // Claude Sonnet：reviewer 默认使用它，适合代码审查。
+        "claude-sonnet-4-6": {
+          "name": "Claude Sonnet 4.6 via local uvicorn"
+        },
+
+        // Claude Opus：更强但成本更高，可按需手动切换。
+        "claude-opus-4-6": {
+          "name": "Claude Opus 4.6 via local uvicorn"
+        },
+
+        // Claude Opus 新版本：更强但成本更高，可按需手动切换。
+        "claude-opus-4-7": {
+          "name": "Claude Opus 4.7 via local uvicorn"
+        }
+      }
+    }
+  },
+
+  // ============================================================
+  // 默认模型配置
+  // 当你没有显式切换 agent 或指定模型时，OpenCode 默认使用这里的模型。
+  // 当前默认走 DeepSeek 官网，而不是 local-bridge。
+  // ============================================================
+  "model": "deepseek/deepseek-v4-pro",
+  "small_model": "deepseek/deepseek-v4-flash",
+
+  // ============================================================
+  // 全局权限配置
+  // 这些权限对默认 agent 和未单独覆盖权限的 agent 生效。
+  // 策略：读普通文件允许，读密钥文件拒绝，写文件和执行大多数命令需要确认。
+  // ============================================================
+  "permission": {
+    // 文件读取权限。
+    "read": {
+      // 默认允许读取普通文件。
+      "*": "allow",
+
+      // 禁止读取 .env，避免泄露 API key / token。
+      "*.env": "deny",
+      "*.env.*": "deny",
+
+      // 允许读取示例环境变量文件，因为通常不含真实密钥。
+      "*.env.example": "allow"
+    },
+
+    // 允许使用 glob 查找文件。
+    "glob": "allow",
+
+    // 允许 grep 搜索代码内容。
+    "grep": "allow",
+
+    // 允许列目录。
+    "list": "allow",
+
+    // 允许使用语言服务能力，例如符号、诊断、跳转等。
+    "lsp": "allow",
+
+    // 编辑文件前必须询问用户。
+    "edit": "ask",
+
+    // Bash 命令权限。
+    "bash": {
+      // 默认所有命令都需要确认。
+      "*": "ask",
+
+      // OpenCode 自身配置目录下的 MCP server 目录创建允许自动执行，
+      // 用于避免反复出现 Permission required: Create image-tools/pdf-tools directory。
+      "mkdir -p /home/segzix/.config/opencode/**": "allow",
+      "mkdir -p ~/.config/opencode/**": "allow",
+      "mkdir -p $HOME/.config/opencode/**": "allow",
+
+      // 常见只读命令允许自动执行。
+      "pwd": "allow",
+      "ls *": "allow",
+      "cat *": "allow",
+      "grep *": "allow",
+      "find *": "allow",
+
+      // Git 只读命令允许自动执行。
+      "git status*": "allow",
+      "git diff*": "allow",
+      "git log*": "allow",
+
+      // 常见测试命令允许自动执行。
+      "npm test": "allow",
+      "npm run test*": "allow",
+      "pytest*": "allow",
+      "python -m pytest*": "allow",
+
+      // 危险命令默认拒绝或要求确认。
+      "rm *": "deny",
+      "rm -rf *": "deny",
+      "sudo *": "deny",
+      "chmod *": "ask",
+      "chown *": "deny",
+      "git reset*": "deny",
+      "git clean*": "deny",
+      "git push*": "ask"
+    },
+
+    // 调用子 agent 前询问。
+    "task": "ask",
+
+    // 使用 skill 前询问。
+    "skill": "ask",
+
+    // 联网读取网页前询问。
+    "webfetch": "ask",
+
+    // 联网搜索前询问。
+    "websearch": "ask",
+
+    // 访问项目外部目录前询问；但 OpenCode 自身配置目录自动放行，
+    // 避免 MCP server 目录创建/读取时反复弹 Permission required。
+    "external_directory": {
+      "/home/segzix/.config/opencode/**": "allow",
+      "~/.config/opencode/**": "allow",
+      "$HOME/.config/opencode/**": "allow",
+      "*": "ask"
+    },
+
+    // 防止循环调用或异常循环，触发时询问。
+    "doom_loop": "ask"
+  },
+
+  // ============================================================
+  // Agent 角色配置
+  // 这部分不是强制流水线，而是定义可用角色。
+  // 你需要手动切换 agent，或通过 @reviewer / @debugger 等方式调用 subagent。
+  // ============================================================
+  "agent": {
+    // ------------------------------------------------------------
+    // planner：规划者
+    // 作用：读项目、分析问题、制定修改方案。
+    // 模型：DeepSeek 官方 API。
+    // 权限：只读，不允许编辑。
+    // ------------------------------------------------------------
+    "planner": {
+      "description": "Analyze code, inspect project structure, and make implementation plans without modifying files. Use GPT official API directly.",
+      "mode": "primary",
+      "model": "local-bridge/gpt-5.5",
+      "temperature": 0.1,
+      "steps": 10,
+      "permission": {
+        "read": {
+          "*": "allow",
+          "*.env": "deny",
+          "*.env.*": "deny",
+          "*.env.example": "allow"
+        },
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "lsp": "allow",
+
+        // planner 只负责分析和规划，不允许直接修改文件。
+        "edit": "deny",
+
+        "bash": {
+          "*": "ask",
+
+          // OpenCode 自身配置目录下的 MCP server 目录创建允许自动执行，
+          // 用于避免反复出现 Permission required: Create image-tools/pdf-tools directory。
+          "mkdir -p /home/segzix/.config/opencode/**": "allAgentow",
+          "mkdir -p ~/.config/opencode/**": "allow",
+          "mkdir -p $HOME/.config/opencode/**": "allow",
+          "pwd": "allow",
+          "ls *": "allow",
+          "cat *": "allow",
+          "grep *": "allow",
+          "find *": "allow",
+          "git status*": "allow",
+          "git diff*": "allow",
+          "git log*": "allow"
+        },
+
+        // planner 可以在需要时请求 researcher / reviewer 协助，但不能随意调用所有子任务。
+        "task": {
+          "*": "deny",
+          "researcher": "ask",
+          "reviewer": "ask"
+        },
+        "webfetch": "ask",
+        "websearch": "ask",
+        "external_directory": {
+          "/home/segzix/.config/opencode/**": "allow",
+          "~/.config/opencode/**": "allow",
+          "$HOME/.config/opencode/**": "allow",
+          "*": "ask"
+        }
+      }
+    },
+
+    // ------------------------------------------------------------
+    // coder：编码者
+    // 作用：根据已确认方案实际修改代码，并运行必要验证命令。
+    // 模型：GPT 通过本地 uvicorn bridge。
+    // 权限：允许编辑，但每次编辑前询问。
+    // ------------------------------------------------------------
+    "coder": {
+      "description": "Implement approved plans by editing files and running focused verification commands. Use GPT through the local uvicorn bridge.",
+      "mode": "primary",
+      "model": "local-bridge/gpt-5.5",
+      "temperature": 0.2,
+      "steps": 20,
+      "permission": {
+        "read": {
+          "*": "allow",
+          "*.env": "deny",
+          "*.env.*": "deny",
+          "*.env.example": "allow"
+        },
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "lsp": "allow",
+
+        // coder 是唯一默认负责写代码的主角色，但仍需用户确认。
+        "edit": "ask",
+
+        "bash": {
+          "*": "ask",
+
+          // OpenCode 自身配置目录下的 MCP server 目录创建允许自动执行，
+          // 用于避免反复出现 Permission required: Create image-tools/pdf-tools directory。
+          "mkdir -p /home/segzix/.config/opencode/**": "allow",
+          "mkdir -p ~/.config/opencode/**": "allow",
+          "mkdir -p $HOME/.config/opencode/**": "allow",
+
+          "pwd": "allow",
+          "ls *": "allow",
+          "cat *": "allow",
+          "grep *": "allow",
+          "find *": "allow",
+
+          "git status*": "allow",
+          "git diff*": "allow",
+          "git log*": "allow",
+
+          "npm test": "allow",
+          "npm run test*": "allow",
+          "pytest*": "allow",
+          "python -m pytest*": "allow",
+
+          "rm *": "deny",
+          "rm -rf *": "deny",
+          "sudo *": "deny",
+          "chmod *": "ask",
+          "chown *": "deny",
+          "git reset*": "deny",
+          "git clean*": "deny",
+          "git push*": "ask"
+        },
+
+        // coder 可以请求 debugger 分析错误，也可以请求 reviewer 审查 diff。
+        "task": {
+          "*": "deny",
+          "debugger": "ask",
+          "reviewer": "ask"
+        },
+        "webfetch": "ask",
+        "websearch": "ask",
+        "external_directory": {
+          "/home/segzix/.config/opencode/**": "allow",
+          "~/.config/opencode/**": "allow",
+          "$HOME/.config/opencode/**": "allow",
+          "*": "ask"
+        }
+      }
+    },
+
+    // ------------------------------------------------------------
+    // debugger：调试者
+    // 作用：分析错误、日志、测试失败，并提出最小修复建议。
+    // 模型：DeepSeek 官方 API。
+    // 权限：当前允许在确认后编辑；若想职责更严格，可把 edit 改为 deny。
+    // ------------------------------------------------------------
+    "debugger": {
+      "description": "Investigate errors, inspect logs, run diagnostic commands, and propose fixes. Use DeepSeek official API directly.",
+      "mode": "subagent",
+      "model": "deepseek/deepseek-v4-pro",
+      "temperature": 0.1,
+      "steps": 12,
+      "permission": {
+        "read": {
+          "*": "allow",
+          "*.env": "deny",
+          "*.env.*": "deny",
+          "*.env.example": "allow"
+        },
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "lsp": "allow",
+
+        // 调试者默认可以在用户确认后编辑；更保守时建议改为 deny。
+        "edit": "ask",
+
+        "bash": {
+          "*": "ask",
+
+          // OpenCode 自身配置目录下的 MCP server 目录创建允许自动执行，
+          // 用于避免反复出现 Permission required: Create image-tools/pdf-tools directory。
+          "mkdir -p /home/segzix/.config/opencode/**": "allow",
+          "mkdir -p ~/.config/opencode/**": "allow",
+          "mkdir -p $HOME/.config/opencode/**": "allow",
+
+          "pwd": "allow",
+          "ls *": "allow",
+          "cat *": "allow",
+          "grep *": "allow",
+          "find *": "allow",
+
+          "git status*": "allow",
+          "git diff*": "allow",
+
+          "npm test": "allow",
+          "npm run test*": "allow",
+          "pytest*": "allow",
+          "python -m pytest*": "allow",
+          "node *": "ask",
+          "python *": "ask",
+
+          "rm *": "deny",
+          "rm -rf *": "deny",
+          "sudo *": "deny",
+          "git reset*": "deny",
+          "git clean*": "deny"
+        },
+        "webfetch": "ask",
+        "websearch": "ask",
+        "external_directory": {
+          "/home/segzix/.config/opencode/**": "allow",
+          "~/.config/opencode/**": "allow",
+          "$HOME/.config/opencode/**": "allow",
+          "*": "ask"
+        }
+      }
+    },
+
+    // ------------------------------------------------------------
+    // reviewer：审查者
+    // 作用：审查 git diff、兼容性、安全性、维护性和无关改动。
+    // 模型：Claude 通过本地 uvicorn bridge。
+    // 权限：只读，不允许编辑。
+    // ------------------------------------------------------------
+    "reviewer": {
+      "description": "Review code changes for correctness, maintainability, security, and regressions. Do not edit files. Use Claude through the local uvicorn bridge.",
+      "mode": "subagent",
+      "model": "local-bridge/claude-sonnet-4-6",
+      "temperature": 0.1,
+      "steps": 10,
+      "permission": {
+        "read": {
+          "*": "allow",
+          "*.env": "deny",
+          "*.env.*": "deny",
+          "*.env.example": "allow"
+        },
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "lsp": "allow",
+
+        // reviewer 只能审查，不能修改文件。
+        "edit": "deny",
+
+        "bash": {
+          "*": "ask",
+
+          // OpenCode 自身配置目录下的 MCP server 目录创建允许自动执行，
+          // 用于避免反复出现 Permission required: Create image-tools/pdf-tools directory。
+          "mkdir -p /home/segzix/.config/opencode/**": "allow",
+          "mkdir -p ~/.config/opencode/**": "allow",
+          "mkdir -p $HOME/.config/opencode/**": "allow",
+          "git status*": "allow",
+          "git diff*": "allow",
+          "git log*": "allow",
+          "grep *": "allow",
+          "find *": "allow"
+        },
+        "webfetch": "ask",
+        "websearch": "ask",
+        "external_directory": {
+          "/home/segzix/.config/opencode/**": "allow",
+          "~/.config/opencode/**": "allow",
+          "$HOME/.config/opencode/**": "allow",
+          "*": "ask"
+        }
+      }
+    },
+
+    // ------------------------------------------------------------
+    // researcher：研究者
+    // 作用：查文档、查外部资料、确认 API/框架行为。
+    // 模型：DeepSeek 官方 API。
+    // 权限：不允许编辑，不允许 bash。
+    // ------------------------------------------------------------
+    "researcher": {
+      "description": "Search documentation and external references without modifying files. Use DeepSeek official API directly.",
+      "mode": "subagent",
+      "model": "deepseek/deepseek-v4-pro",
+      "temperature": 0.2,
+      "steps": 10,
+      "permission": {
+        "read": {
+          "*": "allow",
+          "*.env": "deny",
+          "*.env.*": "deny",
+          "*.env.example": "allow"
+        },
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "lsp": "allow",
+
+        // researcher 只负责资料检索和总结，不允许改文件。
+        "edit": "deny",
+
+        // researcher 不执行本地命令，避免把研究任务变成系统操作。
+        "bash": "deny",
+        "webfetch": "ask",
+        "websearch": "ask",
+        "external_directory": {
+          "/home/segzix/.config/opencode/**": "allow",
+          "~/.config/opencode/**": "allow",
+          "$HOME/.config/opencode/**": "allow",
+          "*": "ask"
+        }
+      }
+    }
+  }
+}
