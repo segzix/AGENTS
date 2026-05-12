@@ -1,0 +1,273 @@
+{
+  // ============================================================
+  // OpenCode 配置文件：Risk 3 - Max / 最大权限模式
+  // ============================================================
+  // 用途说明：
+  // 全局和所有 agent 权限均为 allow。适合完全信任当前环境并希望最大限度减少确认弹窗的场景。
+  //
+  // 使用方式：
+  // 1. 先备份当前配置：
+  //    cp ~/.config/opencode/opencode.json ~/.config/opencode/opencode.json.bak.$(date +%F_%H%M%S)
+  // 2. 再复制本文件为 OpenCode 配置：
+  //    cp opencode.risk-3-max.commented.jsonc ~/.config/opencode/opencode.json
+  //
+  // 注意：
+  // - 本文件使用 JSONC 风格注释，即 // 注释。
+  // - 如果你的 OpenCode 版本不接受注释，请先删除注释再使用。
+  // - 权限值含义：
+  //   allow = 自动允许；ask = 执行前询问；deny = 直接拒绝。
+  //
+  // Schema 用于编辑器提示与配置校验。
+  "$schema": "https://opencode.ai/config.json",
+
+  // 关闭会话分享，避免把会话内容上传或公开。
+  "share": "disabled",
+
+  // 关闭自动更新，避免 OpenCode 版本变化影响当前配置稳定性。
+  "autoupdate": false,
+
+  // ============================================================
+  // MCP Server 配置
+  // ============================================================
+  // 这里配置 OpenCode 可调用的本地工具服务。
+  // pdf-tools：用于处理 PDF 文件，例如抽取文本、分析 PDF 等。
+  // image-tools：用于处理图片文件，例如读取 jpg/png 元数据或分析图片。
+  // 这些命令路径依赖本机：
+  //   /home/segzix/.config/opencode/mcp-servers/
+  "mcp": {
+      "pdf-tools": {
+          "type": "local",
+          "command": [
+              "python",
+              "/home/segzix/.config/opencode/mcp-servers/pdf-tools/pdf_tools_server.py"
+          ],
+          "enabled": true,
+          "timeout": 10000
+      },
+      "image-tools": {
+          "type": "local",
+          "command": [
+              "python",
+              "/home/segzix/.config/opencode/mcp-servers/image-tools/image_tools_server.py"
+          ],
+          "enabled": true,
+          "timeout": 10000
+      }
+  },
+
+  // ============================================================
+  // Provider 配置
+  // ============================================================
+  // deepseek：
+  //   直接访问 DeepSeek 官方 API。
+  //   API key 从环境变量 DEEPSEEK_API_KEY 读取，避免明文写入配置文件。
+  //
+  // local-bridge：
+  //   访问本地 uvicorn bridge：
+  //     http://127.0.0.1:9010/v1
+  //   OpenCode 只读取 LOCAL_BRIDGE_API_KEY。
+  //   GPT / Claude 的真实上游 key 由 bridge 进程内部读取。
+  "provider": {
+      "deepseek": {
+          "npm": "@ai-sdk/openai-compatible",
+          "name": "DeepSeek Official API",
+          "options": {
+              "baseURL": "https://api.deepseek.com",
+              "apiKey": "{env:DEEPSEEK_API_KEY}"
+          },
+          "models": {
+              "deepseek-v4-pro": {
+                  "name": "DeepSeek V4 Pro"
+              },
+              "deepseek-v4-flash": {
+                  "name": "DeepSeek V4 Flash"
+              }
+          }
+      },
+      "local-bridge": {
+          "npm": "@ai-sdk/openai-compatible",
+          "name": "Local uvicorn bridge for GPT and Claude",
+          "options": {
+              "baseURL": "http://127.0.0.1:9010/v1",
+              "apiKey": "{env:LOCAL_BRIDGE_API_KEY}"
+          },
+          "models": {
+              "gpt-5.5": {
+                  "name": "GPT-5.5 via local uvicorn"
+              },
+              "gpt-5.4-mini": {
+                  "name": "GPT-5.4 Mini via local uvicorn"
+              },
+              "claude-haiku-4-5-20251001": {
+                  "name": "Claude Haiku 4.5 via local uvicorn"
+              },
+              "claude-sonnet-4-6": {
+                  "name": "Claude Sonnet 4.6 via local uvicorn"
+              },
+              "claude-opus-4-6": {
+                  "name": "Claude Opus 4.6 via local uvicorn"
+              },
+              "claude-opus-4-7": {
+                  "name": "Claude Opus 4.7 via local uvicorn"
+              }
+          }
+      }
+  },
+
+  // ============================================================
+  // 默认模型配置
+  // ============================================================
+  // model：
+  //   OpenCode 默认使用的主模型。
+  // small_model：
+  //   OpenCode 默认使用的轻量模型，适合低成本辅助任务。
+  "model": "deepseek/deepseek-v4-pro",
+  "small_model": "deepseek/deepseek-v4-flash",
+
+  // ============================================================
+  // 全局权限配置
+  // ============================================================
+  // 全局最大权限模式：所有权限直接 allow，尽量不弹确认。
+  //
+  // 说明：
+  // - 这里是全局兜底权限。
+  // - 如果某个 agent 内部配置了 permission，则 agent 内部权限会覆盖全局权限。
+  "permission": "allow",
+
+  // ============================================================
+  // Agent 角色配置
+  // ============================================================
+  // 这里保留五类 agent：
+  // - planner：规划者
+  // - coder：编码者
+  // - debugger：调试者
+  // - reviewer：审查者
+  // - researcher：研究者
+  //
+  // mode = primary：
+  //   可作为主 agent 使用，通常可在 OpenCode 会话中切换。
+  // mode = subagent：
+  //   作为辅助 agent 使用，通常通过 @debugger / @reviewer / @researcher 调用。
+  "agent": {
+
+    // ------------------------------------------------------------
+    // planner：规划者
+    // ------------------------------------------------------------
+    // 作用：
+    // 用于阅读项目结构、分析问题、制定实现方案。
+    // 备注：
+    // 原设计偏向只读规划；在不同风险等级中是否允许编辑/执行命令由 permission 决定。
+    // 当前风险等级：
+    // Risk 3 - Max / 最大权限模式
+    "planner": {
+      // 该 agent 在 OpenCode UI 中显示的角色说明。
+      "description": "Analyze code, inspect project structure, and make implementation plans without modifying files. Use GPT official API directly.",
+      // primary 表示主 agent；subagent 表示辅助 agent。
+      "mode": "primary",
+      // 该 agent 使用的模型。格式通常为 provider/model。
+      "model": "local-bridge/gpt-5.5",
+      // 采样温度。越低越稳定，越高越发散。
+      "temperature": 0.1,
+      // 该 agent 单轮任务最多执行的步骤数。
+      "steps": 10,
+      // 该 agent 的权限配置，会覆盖全局 permission。
+      "permission": "allow"
+    },
+
+    // ------------------------------------------------------------
+    // coder：编码者
+    // ------------------------------------------------------------
+    // 作用：
+    // 用于实际修改代码、实现方案、运行必要验证。
+    // 备注：
+    // 这是最常用的开发 agent；Risk 2 中允许编辑但 bash 仍需确认。
+    // 当前风险等级：
+    // Risk 3 - Max / 最大权限模式
+    "coder": {
+      // 该 agent 在 OpenCode UI 中显示的角色说明。
+      "description": "Implement approved plans by editing files and running focused verification commands. Use GPT through the local uvicorn bridge.",
+      // primary 表示主 agent；subagent 表示辅助 agent。
+      "mode": "primary",
+      // 该 agent 使用的模型。格式通常为 provider/model。
+      "model": "local-bridge/gpt-5.5",
+      // 采样温度。越低越稳定，越高越发散。
+      "temperature": 0.2,
+      // 该 agent 单轮任务最多执行的步骤数。
+      "steps": 20,
+      // 该 agent 的权限配置，会覆盖全局 permission。
+      "permission": "allow"
+    },
+
+    // ------------------------------------------------------------
+    // debugger：调试者
+    // ------------------------------------------------------------
+    // 作用：
+    // 用于分析报错、查看日志、定位问题并提出修复方案。
+    // 备注：
+    // 适合排查测试失败、运行错误、环境问题。
+    // 当前风险等级：
+    // Risk 3 - Max / 最大权限模式
+    "debugger": {
+      // 该 agent 在 OpenCode UI 中显示的角色说明。
+      "description": "Investigate errors, inspect logs, run diagnostic commands, and propose fixes. Use DeepSeek official API directly.",
+      // primary 表示主 agent；subagent 表示辅助 agent。
+      "mode": "subagent",
+      // 该 agent 使用的模型。格式通常为 provider/model。
+      "model": "deepseek/deepseek-v4-pro",
+      // 采样温度。越低越稳定，越高越发散。
+      "temperature": 0.1,
+      // 该 agent 单轮任务最多执行的步骤数。
+      "steps": 12,
+      // 该 agent 的权限配置，会覆盖全局 permission。
+      "permission": "allow"
+    },
+
+    // ------------------------------------------------------------
+    // reviewer：审查者
+    // ------------------------------------------------------------
+    // 作用：
+    // 用于审查 git diff、代码质量、安全性和潜在回归。
+    // 备注：
+    // 原设计偏向只读审查；在 Risk 3 中也会获得最大权限。
+    // 当前风险等级：
+    // Risk 3 - Max / 最大权限模式
+    "reviewer": {
+      // 该 agent 在 OpenCode UI 中显示的角色说明。
+      "description": "Review code changes for correctness, maintainability, security, and regressions. Do not edit files. Use Claude through the local uvicorn bridge.",
+      // primary 表示主 agent；subagent 表示辅助 agent。
+      "mode": "subagent",
+      // 该 agent 使用的模型。格式通常为 provider/model。
+      "model": "local-bridge/claude-sonnet-4-6",
+      // 采样温度。越低越稳定，越高越发散。
+      "temperature": 0.1,
+      // 该 agent 单轮任务最多执行的步骤数。
+      "steps": 10,
+      // 该 agent 的权限配置，会覆盖全局 permission。
+      "permission": "allow"
+    },
+
+    // ------------------------------------------------------------
+    // researcher：研究者
+    // ------------------------------------------------------------
+    // 作用：
+    // 用于查文档、查外部资料、确认 API 或框架行为。
+    // 备注：
+    // 适合联网检索；不同风险等级决定是否自动联网或执行本地命令。
+    // 当前风险等级：
+    // Risk 3 - Max / 最大权限模式
+    "researcher": {
+      // 该 agent 在 OpenCode UI 中显示的角色说明。
+      "description": "Search documentation and external references without modifying files. Use DeepSeek official API directly.",
+      // primary 表示主 agent；subagent 表示辅助 agent。
+      "mode": "subagent",
+      // 该 agent 使用的模型。格式通常为 provider/model。
+      "model": "deepseek/deepseek-v4-pro",
+      // 采样温度。越低越稳定，越高越发散。
+      "temperature": 0.2,
+      // 该 agent 单轮任务最多执行的步骤数。
+      "steps": 10,
+      // 该 agent 的权限配置，会覆盖全局 permission。
+      "permission": "allow"
+    }
+  }
+}
