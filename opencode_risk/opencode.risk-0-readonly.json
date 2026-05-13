@@ -52,6 +52,25 @@
           ],
           "enabled": true,
           "timeout": 10000
+      },
+      "gh_grep": {
+          "type": "remote",
+          "url": "https://mcp.grep.app",
+          "enabled": true
+      },
+      "context7": {
+          "type": "remote",
+          "url": "https://mcp.context7.com/mcp",
+          "enabled": true,
+          "headers": {
+              "CONTEXT7_API_KEY": "{env:CONTEXT7_API_KEY}"
+          }
+      },
+      "sentry": {
+          "type": "remote",
+          "url": "https://mcp.sentry.dev/mcp",
+          "enabled": true,
+          "oauth": {}
       }
   },
 
@@ -92,6 +111,12 @@
               "apiKey": "{env:LOCAL_BRIDGE_API_KEY}"
           },
           "models": {
+              "deepseek-v4-pro": {
+                  "name": "DeepSeek V4 Pro via local uvicorn"
+              },
+              "deepseek-v4-flash": {
+                  "name": "DeepSeek V4 Flash via local uvicorn"
+              },
               "gpt-5.5": {
                   "name": "GPT-5.5 via local uvicorn"
               },
@@ -121,8 +146,8 @@
   //   OpenCode 默认使用的主模型。
   // small_model：
   //   OpenCode 默认使用的轻量模型，适合低成本辅助任务。
-  "model": "deepseek/deepseek-v4-pro",
-  "small_model": "deepseek/deepseek-v4-flash",
+  "model": "local-bridge/deepseek-v4-pro",
+  "small_model": "local-bridge/deepseek-v4-flash",
 
   // ============================================================
   // 全局权限配置
